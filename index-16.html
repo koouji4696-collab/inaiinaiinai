@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#141021">
+<title>いないいないいない</title>
+<style>
+  /* ---- iPad Safari 全画面用のおまじない ---- */
+  html, body {
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
+    overflow: hidden;                 /* スクロールさせない */
+    overscroll-behavior: none;        /* 引っぱって跳ねるのを止める */
+    background: #141021;
+    touch-action: none;               /* スワイプ・ピンチ拡大を無効 */
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;      /* 長押しメニューを出さない */
+    -webkit-tap-highlight-color: transparent;
+    position: fixed; inset: 0;
+    font-family: "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN W4",
+                 -apple-system, "Segoe UI", sans-serif;
+    color: #f4eef7;
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  /* ---- 画面の上にかぶせる説明パネル ---- */
+  .layer {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 1.1rem;
+    padding: max(2rem, env(safe-area-inset-top)) 1.5rem;
+    box-sizing: border-box;
+    text-align: center;
+    background: radial-gradient(circle at 50% 40%, rgba(60,30,70,.92), rgba(10,8,18,.97));
+    z-index: 10;
+  }
+  .layer.hidden { display: none; }
+
+  .title {
+    font-size: clamp(2.4rem, 9vw, 4.6rem);
+    letter-spacing: .18em;
+    margin: 0;
+    line-height: 1.15;
+    text-shadow: 0 0 18px rgba(255,90,140,.55);
+  }
+  .title .faint { color: #6d5f7d; }
+
+  .lead { font-size: clamp(1rem, 3.6vw, 1.35rem); line-height: 1.9; margin: 0; max-width: 32ch; }
+  .lead b { color: #ffd166; font-weight: 700; }
+
+  .bigbtn {
+    margin-top: .6rem;
+    font: inherit; font-size: clamp(1.2rem, 4.5vw, 1.7rem);
+    padding: .85em 2.4em;
+    border: none; border-radius: 999px;
+    background: linear-gradient(180deg, #ff7aa8, #e0407a);
+    color: #fff; font-weight: 700;
+    box-shadow: 0 8px 0 #8e1f45, 0 14px 30px rgba(0,0,0,.5);
+    cursor: pointer;
+  }
+  .bigbtn:active { transform: translateY(5px); box-shadow: 0 3px 0 #8e1f45; }
+
+  .result { font-size: clamp(2rem, 8vw, 3.4rem); margin: 0; font-weight: 700; }
+  .result.bad  { color: #ff5c6c; text-shadow: 0 0 22px rgba(255,60,80,.6); }
+  .result.good { color: #7dffb0; text-shadow: 0 0 22px rgba(80,255,160,.5); }
+
+  /* ---- あそび方の小さなヒント（ゲーム中ずっと出す） ---- */
+  #hint {
+    position: fixed; left: 0; right: 0;
+    top: max(.6rem, env(safe-area-inset-top));
+    text-align: center; font-size: .85rem; color: #9b8fae;
+    pointer-events: none; z-index: 5;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+<div id="hint">左：うごく　　右：おさえると「じっと見る」</div>
+
+<!-- タイトル画面 -->
+<div class="layer" id="titleLayer">
+  <h1 class="title">いない<span class="faint">いない</span>いない</h1>
+  <p class="lead">
+    見ているあいだ、女の子は うごけない。<br>
+    目をはなすと、おいかけてくる。<br><br>
+    <b>左がわ</b>を ゆびでなぞると あるく。<br>
+    <b>右がわ</b>を おさえると じっと見る。<br>
+    あるく むきが 見ている むき。
+  </p>
+  <button class="bigbtn" id="startBtn">はじめる</button>
+</div>
+
+<!-- 結果画面 -->
+<div class="layer hidden" id="resultLayer">
+  <p class="result" id="resultText"></p>
+  <button class="bigbtn" id="retryBtn">もういちど</button>
+</div>
+
+<script>
+/* ============================================================
+   ◆娘のアレンジコーナー◆
+   ここの すうじ を かえると、ゲームが かわります。
+   かえたら ほぞん して、ブラウザを こうしん（リロード）してね。
+   ============================================================ */
+
+/* --- ① はやさ ------------------------------------------- */
+let プレイヤーの歩くスピード = 3.4;
+// ↑ じぶんが あるく はやさ。大きいほど はやい。（おすすめ 2 〜 6）
+
+let こわい女の子が追いかけてくるスピード = 2.1;
+// ↑ こわい女の子の はやさ。じぶんより 大きくすると すごく こわい。（おすすめ 1 〜 4）
+
+/* --- ② 大きさ ------------------------------------------- */
+let こわい女の子の大きさ = 68;
+// ↑ 女の子の 大きさ。（おすすめ 40 〜 120）
+
+let プレイヤーの大きさ = 44;
+// ↑ じぶんの 大きさ。（おすすめ 30 〜 60）
+
+/* --- ③ え（画像）を いれかえる ---------------------------
+   じぶんで かいた えを つかうときは、
+   index.html と おなじ フォルダに がぞうを おいて、
+   "" の なかに ファイルめい を かきます。
+   れい： let かわいい女の子のえ = "kawaii.png";
+   "" のままだと、しかくい ダミーの え が でます。       */
+let かわいい女の子のえ = "";   // とまっている ときの え
+let こわい女の子のえ   = "";   // おいかけてくる ときの え
+let じぶんのえ         = "";   // プレイヤーの え
+
+/* --- ④ ゴール ------------------------------------------- */
+let ゴールのよこのばしょ = 0.50;  // 0.0 が いちばん左、1.0 が いちばん右、0.5 が まんなか
+let ゴールのたてのばしょ = 0.10;  // 0.0 が いちばん上、1.0 が いちばん下
+let ゴールのおおきさ     = 120;   // 大きいほど ゴールしやすい（おすすめ 80 〜 200）
+
+/* --- ⑤ メッセージ --------------------------------------- */
+let つかまったときのメッセージ = "つかまった！";
+let クリアしたときのメッセージ = "にげきった！";
+
+/* --- ⑥ 女の子の ばしょ と かず --------------------------
+   { よこ: , たて: } を ふやすと 女の子が ふえます。
+   けすと へります。                                      */
+let 女の子のばしょ = [
+  { よこ: 0.22, たて: 0.42 },
+  { よこ: 0.78, たて: 0.58 },
+];
+
+/* --- ⑦ 「見る」ちから ----------------------------------- */
+let 見つめられるきょり = 360;  // これより とおいと、見ても とまらない
+let 見えるひろさ       = 48;   // 見える はんい の ひろさ（ど）。大きいほど かんたん
+
+/* --- ⑧ いろ --------------------------------------------- */
+let ゆかのいろ   = "#1b1526";
+let かべのいろ   = "#3a2f4d";
+let ゴールのいろ = "#7dffb0";
+
+/* ============================================================
+   ここから下は おとうさんのコーナー（ロジック）
+   ============================================================ */
+
+/* --- 壁のレイアウト（画面比率で指定：0.0〜1.0）------------- */
+const かべのばしょ = [
+  { よこ:0.06, たて:0.28, はば:0.30, たかさ:0.035 },
+  { よこ:0.64, たて:0.28, はば:0.30, たかさ:0.035 },
+  { よこ:0.38, たて:0.60, はば:0.24, たかさ:0.035 },
+  { よこ:0.04, たて:0.62, はば:0.035, たかさ:0.20 },
+  { よこ:0.92, たて:0.62, はば:0.035, たかさ:0.20 },
+];
+
+const かべごしでも見える = false; // true にすると 壁ごしでも女の子を止められる
+const おとをだす = true;          // 心臓の音（ドキドキ）
+
+// ---- 基本セットアップ ----
+const cv  = document.getElementById('game');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+
+const 画像 = { かわいい:null, こわい:null, じぶん:null };
+function 画像をよみこむ(url){
+  if(!url) return null;
+  const im = new Image();
+  im.src = url;
+  im.onerror = () => { im.よみこみ失敗 = true; };
+  return im;
+}
+function 画像を全部よみこむ(){
+  画像.かわいい = 画像をよみこむ(かわいい女の子のえ);
+  画像.こわい   = 画像をよみこむ(こわい女の子のえ);
+  画像.じぶん   = 画像をよみこむ(じぶんのえ);
+}
+function つかえる(im){ return im && im.complete && !im.よみこみ失敗 && im.naturalWidth > 0; }
+
+// ---- 世界の状態 ----
+let じょうたい = 'title';           // 'title' | 'playing' | 'clear' | 'gameover'
+let かべ = [];
+let ゴール = { x:0, y:0, r:0 };
+const じぶん = { x:0, y:0, むき:-Math.PI/2, r:0 };
+let 女の子たち = [];
+let ゆれ = 0;                       // 画面のゆれ（つかまりそうな時）
+
+function 画面サイズをあわせる(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  cv.width  = Math.round(W * DPR);
+  cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ステージをつくる();
+}
+
+function ステージをつくる(){
+  かべ = かべのばしょ.map(k => ({
+    x: k.よこ * W, y: k.たて * H,
+    w: k.はば * W, h: k.たかさ * H
+  }));
+  ゴール = {
+    x: ゴールのよこのばしょ * W,
+    y: ゴールのたてのばしょ * H,
+    r: ゴールのおおきさ / 2
+  };
+  じぶん.r = プレイヤーの大きさ / 2;
+}
+
+function リセット(){
+  ステージをつくる();
+  じぶん.x = W * 0.5;
+  じぶん.y = H * 0.90;
+  じぶん.むき = -Math.PI / 2;
+  女の子たち = 女の子のばしょ.map(b => ({
+    x: b.よこ * W,
+    y: b.たて * H,
+    r: こわい女の子の大きさ / 2,
+    とまってる: true,
+    ゆらぎ: Math.random() * 10
+  }));
+  ゆれ = 0;
+  ドキドキタイマー = 0;
+}
+
+/* ------------------------------------------------------------
+   そうさ（タッチ・マウス・キーボード）
+   画面の左半分＝バーチャルジョイスティック
+   画面の右半分＝おさえているあいだ「じっと見る」
+   ------------------------------------------------------------ */
+const ジョイ = { つかってる:false, id:null, もとx:0, もとy:0, いまx:0, いまy:0, dx:0, dy:0 };
+let 見るタッチid = null;
+const ジョイの半径 = 68;
+const キー = {};
+
+function ジョイを更新(){
+  let dx = ジョイ.いまx - ジョイ.もとx;
+  let dy = ジョイ.いまy - ジョイ.もとy;
+  const len = Math.hypot(dx, dy);
+  if(len > ジョイの半径){ dx = dx / len * ジョイの半径; dy = dy / len * ジョイの半径; }
+  ジョイ.dx = dx / ジョイの半径;
+  ジョイ.dy = dy / ジョイの半径;
+}
+
+function タッチ開始(id, x, y){
+  if(じょうたい !== 'playing') return;
+  if(x < W * 0.5){
+    if(!ジョイ.つかってる){
+      ジョイ.つかってる = true; ジョイ.id = id;
+      ジョイ.もとx = x; ジョイ.もとy = y;
+      ジョイ.いまx = x; ジョイ.いまy = y;
+      ジョイを更新();
+    }
+  } else {
+    if(見るタッチid === null) 見るタッチid = id;
+  }
+}
+function タッチ移動(id, x, y){
+  if(ジョイ.つかってる && ジョイ.id === id){
+    ジョイ.いまx = x; ジョイ.いまy = y;
+    ジョイを更新();
+  }
+}
+function タッチ終了(id){
+  if(ジョイ.id === id){ ジョイ.つかってる = false; ジョイ.id = null; ジョイ.dx = 0; ジョイ.dy = 0; }
+  if(見るタッチid === id) 見るタッチid = null;
+}
+
+cv.addEventListener('touchstart', e => {
+  e.preventDefault();
+  for(const t of e.changedTouches) タッチ開始(t.identifier, t.clientX, t.clientY);
+}, { passive:false });
+cv.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for(const t of e.changedTouches) タッチ移動(t.identifier, t.clientX, t.clientY);
+}, { passive:false });
+['touchend','touchcancel'].forEach(ev =>
+  cv.addEventListener(ev, e => {
+    e.preventDefault();
+    for(const t of e.changedTouches) タッチ終了(t.identifier);
+  }, { passive:false })
+);
+
+// パソコンで動作確認するとき用（マウス・キーボード）
+cv.addEventListener('mousedown', e => タッチ開始('mouse', e.clientX, e.clientY));
+cv.addEventListener('mousemove', e => タッチ移動('mouse', e.clientX, e.clientY));
+window.addEventListener('mouseup', () => タッチ終了('mouse'));
+window.addEventListener('keydown', e => { キー[e.key] = true; });
+window.addEventListener('keyup',   e => { キー[e.key] = false; });
+
+// ページ全体のスクロール・ピンチを封じる
+document.addEventListener('touchmove', e => e.preventDefault(), { passive:false });
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('dblclick', e => e.preventDefault());
+
+/* ------------------------------------------------------------
+   あたり判定
+   ------------------------------------------------------------ */
+function 丸と四角があたる(cx, cy, r, k){
+  const nx = Math.max(k.x, Math.min(cx, k.x + k.w));
+  const ny = Math.max(k.y, Math.min(cy, k.y + k.h));
+  return (cx - nx) ** 2 + (cy - ny) ** 2 < r * r;
+}
+
+// 壁を すりぬけないように 動かす（ぶつかったら 横だけ／縦だけ すべる）
+function かべをよけて動かす(もの, dx, dy){
+  const ためす = (nx, ny) => {
+    if(nx < もの.r || nx > W - もの.r || ny < もの.r || ny > H - もの.r) return false;
+    for(const k of かべ) if(丸と四角があたる(nx, ny, もの.r, k)) return false;
+    return true;
+  };
+  if(ためす(もの.x + dx, もの.y + dy)){ もの.x += dx; もの.y += dy; return; }
+  if(ためす(もの.x + dx, もの.y     )){ もの.x += dx; return; }
+  if(ためす(もの.x,      もの.y + dy)){ もの.y += dy; return; }
+}
+
+// 線分が四角にぶつかるか（＝壁ごしに見えないようにする）
+function 線が四角をよこぎる(x1, y1, x2, y2, k){
+  let t0 = 0, t1 = 1;
+  const dx = x2 - x1, dy = y2 - y1;
+  const p = [-dx, dx, -dy, dy];
+  const q = [x1 - k.x, k.x + k.w - x1, y1 - k.y, k.y + k.h - y1];
+  for(let i = 0; i < 4; i++){
+    if(p[i] === 0){ if(q[i] < 0) return false; continue; }
+    const t = q[i] / p[i];
+    if(p[i] < 0){ if(t > t1) return false; if(t > t0) t0 = t; }
+    else        { if(t < t0) return false; if(t < t1) t1 = t; }
+  }
+  return true;
+}
+function 見とおせる(x1, y1, x2, y2){
+  if(かべごしでも見える) return true;
+  for(const k of かべ) if(線が四角をよこぎる(x1, y1, x2, y2, k)) return false;
+  return true;
+}
+
+function 角度のさ(a, b){
+  let d = a - b;
+  while(d >  Math.PI) d -= Math.PI * 2;
+  while(d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+/* ------------------------------------------------------------
+   ドキドキ音（画像ファイル不要。Web Audio で鳴らす）
+   ------------------------------------------------------------ */
+let 音そうち = null, ドキドキタイマー = 0;
+function 音をはじめる(){
+  if(!おとをだす || 音そうち) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if(AC) 音そうち = new AC();
+}
+function ドン(つよさ){
+  if(!音そうち) return;
+  const t = 音そうち.currentTime;
+  const osc = 音そうち.createOscillator();
+  const g   = 音そうち.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(90, t);
+  osc.frequency.exponentialRampToValueAtTime(42, t + 0.16);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.05 + 0.2 * つよさ, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+  osc.connect(g).connect(音そうち.destination);
+  osc.start(t); osc.stop(t + 0.24);
+}
+
+/* ------------------------------------------------------------
+   毎フレームの こうしん
+   ------------------------------------------------------------ */
+function こうしん(dt){
+  if(じょうたい !== 'playing') return;
+
+  // --- 見ているモードか？（右側タッチ or Shiftキー） ---
+  const 見るモード = (見るタッチid !== null) || !!キー['Shift'];
+
+  // --- 進みたい向きを出す ---
+  let mx = 0, my = 0;
+  if(ジョイ.つかってる){ mx = ジョイ.dx; my = ジョイ.dy; }
+  if(キー['ArrowLeft'])  mx -= 1;
+  if(キー['ArrowRight']) mx += 1;
+  if(キー['ArrowUp'])    my -= 1;
+  if(キー['ArrowDown'])  my += 1;
+  if(見るモード){ mx = 0; my = 0; }   // じっと見ているあいだは 足がとまる
+
+  const len = Math.hypot(mx, my);
+  if(len > 0.08){
+    mx /= len; my /= len;
+    じぶん.むき = Math.atan2(my, mx);   // あるく向き＝見ている向き
+    かべをよけて動かす(じぶん, mx * プレイヤーの歩くスピード * dt,
+                            my * プレイヤーの歩くスピード * dt);
+  }
+
+  // --- 女の子たち ---
+  let いちばん近い = 99999;
+  for(const おんなのこ of 女の子たち){
+    const dx = おんなのこ.x - じぶん.x;
+    const dy = おんなのこ.y - じぶん.y;
+    const きょり = Math.hypot(dx, dy);
+    いちばん近い = Math.min(いちばん近い, きょり);
+
+    // とまる条件：じっと見る or 見える範囲に入っている
+    let とまる = false;
+    if(見るモード){
+      とまる = true;
+    } else if(きょり < 見つめられるきょり &&
+              見とおせる(じぶん.x, じぶん.y, おんなのこ.x, おんなのこ.y)){
+      const 相手の方角 = Math.atan2(dy, dx);
+      とまる = Math.abs(角度のさ(相手の方角, じぶん.むき)) < 見えるひろさ * Math.PI / 180;
+    }
+    おんなのこ.とまってる = とまる;
+
+    if(!とまる && きょり > 1){
+      おんなのこ.ゆらぎ += dt * 0.25;
+      const ぶれ = Math.sin(おんなのこ.ゆらぎ) * 0.18;   // まっすぐ来すぎないように
+      const 角 = Math.atan2(dy, dx) + Math.PI + ぶれ;    // プレイヤーの方へ
+      かべをよけて動かす(おんなのこ,
+        Math.cos(角) * こわい女の子が追いかけてくるスピード * dt,
+        Math.sin(角) * こわい女の子が追いかけてくるスピード * dt);
+    }
+
+    // つかまった？
+    if(Math.hypot(おんなのこ.x - じぶん.x, おんなのこ.y - じぶん.y) < (おんなのこ.r + じぶん.r) * 0.62){
+      おわり(false);
+      return;
+    }
+  }
+
+  // --- ゴールした？ ---
+  if(Math.hypot(じぶん.x - ゴール.x, じぶん.y - ゴール.y) < ゴール.r * 0.8){
+    おわり(true);
+    return;
+  }
+
+  // --- ドキドキと画面のゆれ ---
+  const ちかさ = Math.max(0, 1 - いちばん近い / 420);
+  ゆれ = ちかさ * ちかさ * 5;
+  ドキドキタイマー -= dt / 60;
+  if(ドキドキタイマー <= 0 && ちかさ > 0.12){
+    ドン(ちかさ);
+    ドキドキタイマー = 0.95 - 0.55 * ちかさ;
+  }
+}
+
+/* ------------------------------------------------------------
+   えがく
+   ------------------------------------------------------------ */
+function えがく(じかん){
+  ctx.save();
+  if(ゆれ > 0.2 && じょうたい === 'playing'){
+    ctx.translate((Math.random() - .5) * ゆれ, (Math.random() - .5) * ゆれ);
+  }
+
+  // 床
+  ctx.fillStyle = ゆかのいろ;
+  ctx.fillRect(-10, -10, W + 20, H + 20);
+  ctx.strokeStyle = 'rgba(255,255,255,.035)';
+  ctx.lineWidth = 1;
+  const ます = 56;
+  ctx.beginPath();
+  for(let x = 0; x < W; x += ます){ ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+  for(let y = 0; y < H; y += ます){ ctx.moveTo(0, y); ctx.lineTo(W, y); }
+  ctx.stroke();
+
+  ゴールをえがく(じかん);
+  かべをえがく();
+  if(じょうたい === 'playing' || じょうたい === 'gameover'){
+    見えるはんいをえがく();
+    for(const お of 女の子たち) 女の子をえがく(お, じかん);
+    じぶんをえがく();
+  }
+  ジョイスティックをえがく();
+  ctx.restore();
+}
+
+function かべをえがく(){
+  for(const k of かべ){
+    ctx.fillStyle = かべのいろ;
+    ctx.fillRect(k.x, k.y, k.w, k.h);
+    ctx.fillStyle = 'rgba(255,255,255,.10)';
+    ctx.fillRect(k.x, k.y, k.w, 3);
+  }
+}
+
+function ゴールをえがく(じかん){
+  const また = 0.5 + 0.5 * Math.sin(じかん / 420);
+  const g = ctx.createRadialGradient(ゴール.x, ゴール.y, 4, ゴール.x, ゴール.y, ゴール.r);
+  g.addColorStop(0, 'rgba(125,255,176,' + (0.30 + 0.18 * また) + ')');
+  g.addColorStop(1, 'rgba(125,255,176,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(ゴール.x, ゴール.y, ゴール.r, 0, Math.PI * 2); ctx.fill();
+
+  ctx.strokeStyle = ゴールのいろ;
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 9]);
+  ctx.beginPath(); ctx.arc(ゴール.x, ゴール.y, ゴール.r * 0.8, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = ゴールのいろ;
+  ctx.font = 'bold ' + Math.round(ゴール.r * 0.4) + 'px "Hiragino Maru Gothic ProN", sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('ゴール', ゴール.x, ゴール.y);
+}
+
+function 見えるはんいをえがく(){
+  const はば = 見えるひろさ * Math.PI / 180;
+  const g = ctx.createRadialGradient(じぶん.x, じぶん.y, じぶん.r,
+                                     じぶん.x, じぶん.y, 見つめられるきょり);
+  g.addColorStop(0, 'rgba(255,246,200,.20)');
+  g.addColorStop(1, 'rgba(255,246,200,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(じぶん.x, じぶん.y);
+  ctx.arc(じぶん.x, じぶん.y, 見つめられるきょり, じぶん.むき - はば, じぶん.むき + はば);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ---- プレイヤー（画像がなければダミーの図形）----
+function じぶんをえがく(){
+  const s = プレイヤーの大きさ;
+  if(つかえる(画像.じぶん)){
+    ctx.drawImage(画像.じぶん, じぶん.x - s/2, じぶん.y - s/2, s, s);
+    return;
+  }
+  ctx.save();
+  ctx.translate(じぶん.x, じぶん.y);
+  // 影
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  ctx.beginPath(); ctx.ellipse(0, s*0.42, s*0.36, s*0.14, 0, 0, Math.PI*2); ctx.fill();
+  // からだ
+  ctx.fillStyle = '#5ec8ff';
+  ctx.strokeStyle = '#0d2b42'; ctx.lineWidth = Math.max(2, s*0.06);
+  ctx.beginPath(); ctx.arc(0, 0, s*0.42, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  // 向きを示す帽子のつば
+  ctx.rotate(じぶん.むき);
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(s*0.20, -s*0.20); ctx.lineTo(s*0.52, 0); ctx.lineTo(s*0.20, s*0.20);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+// ---- 女の子（画像がなければダミーの図形）----
+function 女の子をえがく(お, じかん){
+  const s = こわい女の子の大きさ;
+  const とまってる = お.とまってる;
+  const ゆれ幅 = とまってる ? 0 : Math.sin(じかん / 90 + お.ゆらぎ) * s * 0.035;
+
+  const im = とまってる ? 画像.かわいい : 画像.こわい;
+  if(つかえる(im)){
+    // 追いかけてくる時は 赤いもや を うしろに
+    if(!とまってる) オーラ(お.x, お.y + ゆれ幅, s, 'rgba(255,40,60,.35)');
+    ctx.drawImage(im, お.x - s/2, お.y - s/2 + ゆれ幅, s, s);
+    return;
+  }
+
+  ctx.save();
+  ctx.translate(お.x, お.y + ゆれ幅);
+  const r = s * 0.5;
+
+  if(とまってる) オーラ(0, 0, s, 'rgba(255,220,240,.22)', true);
+  else           オーラ(0, 0, s, 'rgba(255,40,60,.38)', true);
+
+  // 影
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  ctx.beginPath(); ctx.ellipse(0, r*0.98, r*0.62, r*0.18, 0, 0, Math.PI*2); ctx.fill();
+
+  const 線 = Math.max(2, s * 0.045);
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#14121c';
+  ctx.lineWidth = 線;
+
+  // ワンピース
+  ctx.fillStyle = とまってる ? '#fdfbff' : '#cdc6d6';
+  ctx.beginPath();
+  ctx.moveTo(-r*0.34, r*0.06);
+  ctx.lineTo( r*0.34, r*0.06);
+  ctx.lineTo( r*0.62, r*0.92);
+  ctx.lineTo(-r*0.62, r*0.92);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+
+  // かお
+  ctx.fillStyle = とまってる ? '#fff3f6' : '#d9d2e0';
+  ctx.beginPath(); ctx.arc(0, -r*0.32, r*0.62, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+  // かみ（上半分）
+  ctx.fillStyle = '#17151f';
+  ctx.beginPath();
+  ctx.arc(0, -r*0.32, r*0.62, Math.PI*1.03, Math.PI*1.97);
+  ctx.closePath(); ctx.fill();
+  // 前髪
+  ctx.beginPath();
+  ctx.moveTo(-r*0.60, -r*0.34);
+  ctx.lineTo(-r*0.16, -r*0.02);
+  ctx.lineTo( r*0.04, -r*0.40);
+  ctx.lineTo( r*0.26, -r*0.02);
+  ctx.lineTo( r*0.60, -r*0.34);
+  ctx.closePath(); ctx.fill();
+  // サイドのポニーテール
+  ctx.beginPath();
+  ctx.ellipse(r*0.72, -r*0.20, r*0.22, r*0.40, 0.3, 0, Math.PI*2);
+  ctx.fill();
+
+  if(とまってる){
+    // ぱっちりした目
+    for(const mx of [-r*0.26, r*0.26]){
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(mx, -r*0.28, r*0.20, 0, Math.PI*2); ctx.fill();
+      ctx.lineWidth = 線*0.7; ctx.stroke();
+      ctx.fillStyle = '#14121c';
+      ctx.beginPath(); ctx.arc(mx, -r*0.26, r*0.10, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(mx + r*0.05, -r*0.31, r*0.04, 0, Math.PI*2); ctx.fill();
+    }
+    // にっこり
+    ctx.strokeStyle = '#14121c'; ctx.lineWidth = 線*0.8;
+    ctx.beginPath(); ctx.arc(0, r*0.02, r*0.14, 0.15*Math.PI, 0.85*Math.PI); ctx.stroke();
+  } else {
+    // 目のところを黒くぬりつぶして、赤い×（むすめの絵とおなじ）
+    ctx.fillStyle = '#0a0a0c';
+    ctx.fillRect(-r*0.66, -r*0.46, r*1.32, r*0.34);
+    ctx.strokeStyle = '#e01020'; ctx.lineWidth = 線*1.1; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-r*0.46, -r*0.42); ctx.lineTo( r*0.46, -r*0.14);
+    ctx.moveTo( r*0.46, -r*0.42); ctx.lineTo(-r*0.46, -r*0.14);
+    ctx.stroke();
+    // ぎざぎざの口
+    ctx.strokeStyle = '#14121c'; ctx.lineWidth = 線*0.75; ctx.lineCap = 'butt';
+    ctx.beginPath();
+    ctx.moveTo(-r*0.18, r*0.00);
+    ctx.lineTo(-r*0.06, r*0.10);
+    ctx.lineTo( r*0.04, r*0.00);
+    ctx.lineTo( r*0.16, r*0.10);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function オーラ(x, y, s, いろ, ちゅうしん){
+  const r = s * 0.95;
+  const g = ctx.createRadialGradient(x, y, s*0.25, x, y, r);
+  g.addColorStop(0, いろ);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+}
+
+function ジョイスティックをえがく(){
+  if(!ジョイ.つかってる) return;
+  ctx.strokeStyle = 'rgba(255,255,255,.22)';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(ジョイ.もとx, ジョイ.もとy, ジョイの半径, 0, Math.PI*2); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.30)';
+  ctx.beginPath();
+  ctx.arc(ジョイ.もとx + ジョイ.dx * ジョイの半径,
+          ジョイ.もとy + ジョイ.dy * ジョイの半径, 26, 0, Math.PI*2);
+  ctx.fill();
+}
+
+/* ------------------------------------------------------------
+   画面の きりかえ
+   ------------------------------------------------------------ */
+const titleLayer  = document.getElementById('titleLayer');
+const resultLayer = document.getElementById('resultLayer');
+const resultText  = document.getElementById('resultText');
+const hint        = document.getElementById('hint');
+
+function ゲームをはじめる(){
+  音をはじめる();
+  if(音そうち && 音そうち.state === 'suspended') 音そうち.resume();
+  リセット();
+  じょうたい = 'playing';
+  titleLayer.classList.add('hidden');
+  resultLayer.classList.add('hidden');
+  hint.style.display = 'block';
+}
+
+function おわり(せいこう){
+  じょうたい = せいこう ? 'clear' : 'gameover';
+  resultText.textContent = せいこう ? クリアしたときのメッセージ : つかまったときのメッセージ;
+  resultText.className = 'result ' + (せいこう ? 'good' : 'bad');
+  resultLayer.classList.remove('hidden');
+  hint.style.display = 'none';
+  ジョイ.つかってる = false; ジョイ.dx = 0; ジョイ.dy = 0;
+  見るタッチid = null;
+}
+
+document.getElementById('startBtn').addEventListener('click', ゲームをはじめる);
+document.getElementById('retryBtn').addEventListener('click', ゲームをはじめる);
+
+/* ------------------------------------------------------------
+   メインループ
+   ------------------------------------------------------------ */
+let まえのじかん = 0;
+function ループ(いま){
+  const dt = Math.min(3, (いま - まえのじかん) / 16.667 || 1);
+  まえのじかん = いま;
+  こうしん(dt);
+  えがく(いま);
+  requestAnimationFrame(ループ);
+}
+
+window.addEventListener('resize', () => { 画面サイズをあわせる(); if(じょうたい === 'playing') リセット(); });
+window.addEventListener('orientationchange', () => setTimeout(() => {
+  画面サイズをあわせる(); if(じょうたい === 'playing') リセット();
+}, 250));
+
+画像を全部よみこむ();
+画面サイズをあわせる();
+リセット();
+hint.style.display = 'none';
+requestAnimationFrame(ループ);
+</script>
+</body>
+</html>
