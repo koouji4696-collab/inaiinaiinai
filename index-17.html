@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#141021">
+<title>いないいないいない</title>
+<style>
+  /* ---- iPad Safari 全画面用のおまじない ---- */
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; overscroll-behavior: none;
+    background: #141021;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+    position: fixed; inset: 0;
+    font-family: "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN W4", -apple-system, "Segoe UI", sans-serif;
+    color: #f4eef7;
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+  .hidden { display: none !important; }
+
+  /* ---- かぶせる画面 ---- */
+  .layer {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1.1rem; padding: max(2rem, env(safe-area-inset-top)) 1.5rem;
+    box-sizing: border-box; text-align: center;
+    background: radial-gradient(circle at 50% 40%, rgba(60,30,70,.92), rgba(10,8,18,.97));
+    z-index: 10;
+  }
+  .title { font-size: clamp(2.2rem, 8.5vw, 4.4rem); letter-spacing: .18em; margin: 0; line-height: 1.15;
+           text-shadow: 0 0 18px rgba(255,90,140,.55); }
+  .title .faint { color: #6d5f7d; }
+  .lead { font-size: clamp(.95rem, 3.4vw, 1.3rem); line-height: 1.9; margin: 0; max-width: 34ch; }
+  .lead b { color: #ffd166; font-weight: 700; }
+  .bigbtn {
+    font: inherit; font-size: clamp(1.1rem, 4.2vw, 1.6rem); padding: .8em 2.2em;
+    border: none; border-radius: 999px;
+    background: linear-gradient(180deg, #ff7aa8, #e0407a); color: #fff; font-weight: 700;
+    box-shadow: 0 8px 0 #8e1f45, 0 14px 30px rgba(0,0,0,.5); cursor: pointer;
+  }
+  .bigbtn:active { transform: translateY(5px); box-shadow: 0 3px 0 #8e1f45; }
+  .result { font-size: clamp(1.9rem, 7.5vw, 3.2rem); margin: 0; font-weight: 700; }
+  .result.bad  { color: #ff5c6c; text-shadow: 0 0 22px rgba(255,60,80,.6); }
+  .result.good { color: #7dffb0; text-shadow: 0 0 22px rgba(80,255,160,.5); }
+
+  #hint { position: fixed; left: 0; right: 0; top: max(.6rem, env(safe-area-inset-top));
+          text-align: center; font-size: .85rem; color: #9b8fae; pointer-events: none; z-index: 5; }
+
+  /* ---- 歯車ボタン ---- */
+  #gearBtn {
+    position: fixed; z-index: 20;
+    top: max(.7rem, env(safe-area-inset-top)); right: max(.7rem, env(safe-area-inset-right));
+    width: 60px; height: 60px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.28);
+    background: rgba(30,22,44,.85); color: #ffd166; font-size: 28px; line-height: 1;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  #gearBtn:active { transform: scale(.92); }
+
+  /* ---- せっていパネル ---- */
+  #panel { justify-content: flex-start; gap: 0; padding: 0; }
+  .sheet {
+    flex: 1 1 auto; width: 100%; max-width: 620px; box-sizing: border-box;
+    overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y;
+    padding: max(1.2rem, env(safe-area-inset-top)) 1.2rem 1rem;
+    text-align: left;
+  }
+  .sheet h2 { margin: .2rem 0 1rem; font-size: 1.6rem; text-align: center; letter-spacing: .1em; }
+  .sheet h3 { margin: 1.6rem 0 .6rem; font-size: 1rem; color: #b9a8d0; letter-spacing: .06em;
+              border-bottom: 1px solid rgba(255,255,255,.12); padding-bottom: .4rem; }
+  .row { margin: .9rem 0; }
+  .rowtop { display: flex; align-items: baseline; justify-content: space-between; font-size: 1.05rem; }
+  .rowval { font-weight: 700; color: #ffd166; font-size: 1.2rem; }
+  .ctrl { display: flex; align-items: center; gap: .7rem; margin-top: .45rem; }
+  .pm {
+    flex: 0 0 auto; width: 58px; height: 58px; border-radius: 18px;
+    border: none; background: #3b2d55; color: #fff; font-size: 28px; font-weight: 700;
+    cursor: pointer; line-height: 1;
+  }
+  .pm:active { background: #59437f; transform: scale(.94); }
+  input[type=range] { flex: 1 1 auto; height: 40px; accent-color: #ff7aa8; background: transparent; }
+  .textin {
+    width: 100%; box-sizing: border-box; font: inherit; font-size: 1.1rem;
+    padding: .7em .8em; border-radius: 14px; border: 2px solid rgba(255,255,255,.2);
+    background: #221a33; color: #fff;
+  }
+  .colorrow { display: flex; gap: .7rem; }
+  .colorrow label { flex: 1; font-size: .9rem; color: #b9a8d0; }
+  input[type=color] { width: 100%; height: 52px; border-radius: 14px;
+                      border: 2px solid rgba(255,255,255,.2); background: #221a33; padding: 4px; }
+  .subbtn {
+    display: block; width: 100%; box-sizing: border-box; margin: .6rem 0;
+    font: inherit; font-size: 1.15rem; padding: .8em; border-radius: 18px; border: none;
+    background: #3b2d55; color: #fff; font-weight: 700; cursor: pointer;
+  }
+  .subbtn:active { transform: scale(.98); background: #59437f; }
+  .subbtn.accent { background: #2c6b8f; }
+  .subbtn.off { background: #2a2436; color: #8d81a3; }
+  .melodyrow { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
+  .melodyrow button {
+    flex: 1 1 30%; font: inherit; font-size: 1rem; font-weight: 700; padding: .8em .4em;
+    border-radius: 16px; border: 2px solid rgba(255,255,255,.18);
+    background: #2a2138; color: #ddd2ea; cursor: pointer;
+  }
+  .melodyrow button.on { background: #ff7aa8; color: #fff; border-color: #fff; }
+  .sheetfoot {
+    flex: 0 0 auto; width: 100%; box-sizing: border-box; text-align: center;
+    padding: .8rem 1rem max(1rem, env(safe-area-inset-bottom));
+    background: rgba(10,8,18,.92); border-top: 1px solid rgba(255,255,255,.12);
+  }
+
+  /* ---- めいろ づくりの どうぐばこ ---- */
+  #editBar {
+    position: fixed; z-index: 15; left: 0; right: 0;
+    bottom: max(.6rem, env(safe-area-inset-bottom));
+    display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; padding: 0 .6rem;
+  }
+  .tool {
+    font: inherit; font-size: 1rem; font-weight: 700; padding: .7em 1em;
+    border-radius: 16px; border: 2px solid rgba(255,255,255,.2);
+    background: rgba(30,22,44,.92); color: #ddd2ea; cursor: pointer;
+  }
+  .tool.on { background: #ff7aa8; color: #fff; border-color: #fff; }
+  .tool.done { background: #2e9e6b; color: #fff; }
+  #editHint { position: fixed; z-index: 15; left: 0; right: 0;
+              top: max(.7rem, env(safe-area-inset-top)); text-align: center;
+              font-size: .95rem; color: #ffd166; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+<div id="hint">左：うごく　　右：おさえると「じっと見る」</div>
+<button id="gearBtn" aria-label="せってい">⚙</button>
+
+<!-- タイトル -->
+<div class="layer" id="titleLayer">
+  <h1 class="title">いない<span class="faint">いない</span>いない</h1>
+  <p class="lead">
+    見ているあいだ、女の子は うごけない。<br>
+    目をはなすと、おいかけてくる。<br><br>
+    <b>左がわ</b>を なぞると あるく。<br>
+    <b>右がわ</b>を おさえると じっと見る。<br>
+    あるく むきが 見ている むき。
+  </p>
+  <button class="bigbtn" id="startBtn">はじめる</button>
+</div>
+
+<!-- けっか -->
+<div class="layer hidden" id="resultLayer">
+  <p class="result" id="resultText"></p>
+  <button class="bigbtn" id="retryBtn">もういちど</button>
+</div>
+
+<!-- せってい -->
+<div class="layer hidden" id="panel">
+  <div class="sheet scrollable" id="sheet">
+    <h2>じぶんで かえる</h2>
+    <div id="sliders"></div>
+
+    <h3>ことば</h3>
+    <div class="row">
+      <div class="rowtop"><span>つかまった ときの ことば</span></div>
+      <div class="ctrl"><input class="textin" id="msgBad" type="text" maxlength="20"></div>
+    </div>
+    <div class="row">
+      <div class="rowtop"><span>ゴールした ときの ことば</span></div>
+      <div class="ctrl"><input class="textin" id="msgGood" type="text" maxlength="20"></div>
+    </div>
+
+    <h3>いろ</h3>
+    <div class="row colorrow">
+      <label>ゆか<input type="color" id="colFloor"></label>
+      <label>かべ<input type="color" id="colWall"></label>
+      <label>ゴール<input type="color" id="colGoal"></label>
+    </div>
+
+    <h3>おんがく</h3>
+    <div id="soundSliders"></div>
+    <div class="row">
+      <div class="rowtop"><span>メロディ</span></div>
+      <div class="melodyrow" id="melodyBox"></div>
+    </div>
+    <button class="subbtn" id="bgmBtn">おんがく：オン</button>
+    <button class="subbtn" id="heartBtn">ドキドキ音：オン</button>
+
+    <h3>めいろ</h3>
+    <button class="subbtn accent" id="editBtn">めいろを つくる</button>
+    <button class="subbtn" id="copyBtn">いまの せってい を コピーする</button>
+    <button class="subbtn" id="resetAllBtn">ぜんぶ さいしょに もどす</button>
+  </div>
+  <div class="sheetfoot"><button class="bigbtn" id="playBtn">これで あそぶ</button></div>
+</div>
+
+<!-- めいろ づくり -->
+<div id="editHint" class="hidden">どうぐを えらんで、ますを さわってね</div>
+<div id="editBar" class="hidden">
+  <button class="tool on" data-tool="かべ">■ かべ</button>
+  <button class="tool" data-tool="けす">□ けす</button>
+  <button class="tool" data-tool="おんなのこ">おんなのこ</button>
+  <button class="tool" data-tool="ゴール">★ ゴール</button>
+  <button class="tool" data-tool="スタート">▲ スタート</button>
+  <button class="tool" id="clearMaze">ぜんぶ けす</button>
+  <button class="tool done" id="editDone">できた！</button>
+</div>
+
+<script>
+/* ============================================================
+   ◆娘のアレンジコーナー◆
+   iPad の ⚙ ボタンからも かえられます。
+   ここの すうじ は「さいしょの じょうたい」です。
+   ============================================================ */
+
+/* --- ① はやさ ------------------------------------------- */
+let プレイヤーの歩くスピード = 3.4;   // じぶんが あるく はやさ（おすすめ 2 〜 6）
+let こわい女の子が追いかけてくるスピード = 2.1; // 女の子の はやさ（おすすめ 1 〜 4）
+
+/* --- ② 大きさ ------------------------------------------- */
+let こわい女の子の大きさ = 60;   // 女の子の 大きさ（おすすめ 40 〜 120）
+let プレイヤーの大きさ   = 42;   // じぶんの 大きさ（おすすめ 30 〜 60）
+
+/* --- ③ え（画像）を いれかえる ---------------------------
+   index.html と おなじ フォルダに がぞうを おいて、
+   "" の なかに ファイルめい を かく。れい： "kawaii.png"
+   "" のままだと ダミーの え が でます。                    */
+let かわいい女の子のえ = "";   // とまっている ときの え
+let こわい女の子のえ   = "";   // おいかけてくる ときの え
+let じぶんのえ         = "";   // プレイヤーの え
+
+/* --- ④ めいろ -------------------------------------------
+   よこ 12 ます × たて 9 ます。もじの いみ：
+     #  … かべ
+     .  … なにもない ゆか
+     S  … スタート（じぶんが でてくる ばしょ）
+     G  … ゴール
+     X  … おんなのこ
+   iPad の ⚙ →「めいろを つくる」で さわって かえられます。 */
+let めいろ = [
+  "......G.....",
+  ".##.....###.",
+  "..#.##....X.",
+  ".#..#.#..##.",
+  ".#.#...#..#.",
+  "X..#.##...#.",
+  ".#...#.#.##.",
+  ".###...#..#.",
+  "......S.....",
+];
+
+/* --- ⑤ ゴールと「見る」ちから ---------------------------- */
+let ゴールのおおきさ   = 120;  // 大きいほど ゴールしやすい（おすすめ 80 〜 200）
+let 見つめられるきょり = 360;  // これより とおいと、見ても とまらない
+let 見えるひろさ       = 48;   // 見える はんいの ひろさ（ど）。大きいほど かんたん
+
+/* --- ⑥ メッセージ --------------------------------------- */
+let つかまったときのメッセージ = "つかまった！";
+let クリアしたときのメッセージ = "にげきった！";
+
+/* --- ⑦ いろ --------------------------------------------- */
+let ゆかのいろ   = "#1b1526";
+let かべのいろ   = "#3a2f4d";
+let ゴールのいろ = "#7dffb0";
+
+/* --- ⑧ こわい おんがく -----------------------------------
+   おんがくは ファイルを つかわず、その場で つくって います。
+   メロディの すうじ は「けんばん の ばんごう」。
+     60 = まんなかの ド
+     +1 で となりの けんばん（はんおん 上）
+     -12 で 1オクターブ ひくく、+12 で 1オクターブ 高く
+   null を かくと「おやすみ（音が でない）」。            */
+let おんがくをならす   = true;
+let おんがくのおおきさ = 0.5;   // 0（しずか）〜 1（大きい）
+let おんがくのはやさ   = 64;    // 大きいほど はやい（おすすめ 40 〜 110）
+let ドキドキ音をならす = true;  // 女の子が 近いときの 心ぞうの音
+
+let メロディ = [
+  69, null, 72, null, 76, 77, 76, null,
+  72, null, 71, null, 68, null, 69, null
+];
+
+/* ============================================================
+   ここから下は おとうさんのコーナー（ロジック）
+   ============================================================ */
+
+const かべごしでも見える = false; // true にすると 壁ごしでも女の子を止められる
+
+const ヨコマス = 12, タテマス = 9;
+
+// メロディの みほん（せってい画面から えらべる）
+const メロディの見本 = [
+  { なまえ:'オルゴール', おと:[69,null,72,null,76,77,76,null,72,null,71,null,68,null,69,null] },
+  { なまえ:'よびごえ',   おと:[64,67,63,null,64,67,63,null,62,65,61,null,59,null,null,null] },
+  { なまえ:'かいだん',   おと:[72,71,70,69,68,67,66,65,64,63,62,61,60,null,null,null] },
+  { なまえ:'ぐるぐる',   おと:[69,75,69,75,68,74,68,74,67,73,67,73,66,72,66,72] },
+  { なまえ:'しずか',     おと:[69,null,null,null,null,null,null,null,68,null,null,null,null,null,null,null] }
+];
+
+// アレンジコーナーの初期値を控えておく（「さいしょに もどす」用）
+const しょきち = {
+  歩く: プレイヤーの歩くスピード, 追う: こわい女の子が追いかけてくるスピード,
+  敵大: こわい女の子の大きさ, 自大: プレイヤーの大きさ, ゴール大: ゴールのおおきさ,
+  きょり: 見つめられるきょり, ひろさ: 見えるひろさ,
+  わるい: つかまったときのメッセージ, よい: クリアしたときのメッセージ,
+  ゆか: ゆかのいろ, かべ: かべのいろ, ゴール: ゴールのいろ,
+  めいろ: めいろ.slice(),
+  音量: おんがくのおおきさ, 音速: おんがくのはやさ, 音入: おんがくをならす,
+  心音: ドキドキ音をならす, 曲: メロディ.slice()
+};
+
+// ---- 基本セットアップ ----
+const cv  = document.getElementById('game');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1, セルW = 0, セルH = 0;
+
+const 画像 = { かわいい:null, こわい:null, じぶん:null };
+function 画像をよみこむ(url){
+  if(!url) return null;
+  const im = new Image(); im.src = url;
+  im.onerror = () => { im.よみこみ失敗 = true; };
+  return im;
+}
+function 画像を全部よみこむ(){
+  画像.かわいい = 画像をよみこむ(かわいい女の子のえ);
+  画像.こわい   = 画像をよみこむ(こわい女の子のえ);
+  画像.じぶん   = 画像をよみこむ(じぶんのえ);
+}
+function つかえる(im){ return im && im.complete && !im.よみこみ失敗 && im.naturalWidth > 0; }
+
+// ---- 世界の状態 ----
+let じょうたい = 'title';   // title / playing / clear / gameover / settings / edit
+let かべ = [];
+let スタートのます = { c:6, r:8 };
+let ゴールのます   = { c:6, r:0 };
+let 女の子のますリスト = [];
+let ゴール = { x:0, y:0, r:0 };
+const じぶん = { x:0, y:0, むき:-Math.PI/2, r:0 };
+let 女の子たち = [];
+let ゆれ = 0;
+
+/* ---- めいろ の よみかき ---- */
+function ますをよむ(c, r){
+  const row = めいろ[r] || "";
+  return row[c] || ".";
+}
+function ますをかく(c, r, もじ){
+  const row = (めいろ[r] || "").padEnd(ヨコマス, ".").slice(0, ヨコマス).split('');
+  row[c] = もじ;
+  めいろ[r] = row.join('');
+}
+function もじを全部けす(もじ){
+  for(let r = 0; r < タテマス; r++)
+    for(let c = 0; c < ヨコマス; c++)
+      if(ますをよむ(c, r) === もじ) ますをかく(c, r, '.');
+}
+function めいろを整える(){
+  const なおした = [];
+  for(let r = 0; r < タテマス; r++)
+    なおした.push((めいろ[r] || "").padEnd(ヨコマス, ".").slice(0, ヨコマス));
+  めいろ = なおした;
+}
+function めいろをよみとる(){
+  めいろを整える();
+  かべ = []; 女の子のますリスト = [];
+  let S = null, G = null;
+  for(let r = 0; r < タテマス; r++){
+    for(let c = 0; c < ヨコマス; c++){
+      const ch = ますをよむ(c, r);
+      if(ch === '#') かべ.push({ x:c*セルW, y:r*セルH, w:セルW, h:セルH });
+      else if(ch === 'X') 女の子のますリスト.push({ c:c, r:r });
+      else if(ch === 'S') S = { c:c, r:r };
+      else if(ch === 'G') G = { c:c, r:r };
+    }
+  }
+  スタートのます = S || { c:6, r:タテマス-1 };
+  ゴールのます   = G || { c:6, r:0 };
+  ゴール = {
+    x: (ゴールのます.c + 0.5) * セルW,
+    y: (ゴールのます.r + 0.5) * セルH,
+    r: ゴールのおおきさ / 2
+  };
+  じぶん.r = プレイヤーの大きさ / 2;
+}
+
+function 画面サイズをあわせる(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  セルW = W / ヨコマス; セルH = H / タテマス;
+  めいろをよみとる();
+}
+
+function リセット(){
+  めいろをよみとる();
+  じぶん.x = (スタートのます.c + 0.5) * セルW;
+  じぶん.y = (スタートのます.r + 0.5) * セルH;
+  じぶん.むき = -Math.PI/2;
+  女の子たち = 女の子のますリスト.map(function(m){
+    return { x:(m.c+0.5)*セルW, y:(m.r+0.5)*セルH, r:こわい女の子の大きさ/2,
+             とまってる:true, ゆらぎ:Math.random()*10 };
+  });
+  ゆれ = 0; ドキドキタイマー = 0;
+}
+
+/* ------------------------------------------------------------
+   そうさ
+   ------------------------------------------------------------ */
+const ジョイ = { つかってる:false, id:null, もとx:0, もとy:0, いまx:0, いまy:0, dx:0, dy:0 };
+let 見るタッチid = null;
+const ジョイの半径 = 68;
+const キー = {};
+
+function ジョイを更新(){
+  let dx = ジョイ.いまx - ジョイ.もとx, dy = ジョイ.いまy - ジョイ.もとy;
+  const len = Math.hypot(dx, dy);
+  if(len > ジョイの半径){ dx = dx/len*ジョイの半径; dy = dy/len*ジョイの半径; }
+  ジョイ.dx = dx/ジョイの半径; ジョイ.dy = dy/ジョイの半径;
+}
+function タッチ開始(id, x, y){
+  if(じょうたい === 'edit'){ めいろをぬる(x, y, true); return; }
+  if(じょうたい !== 'playing') return;
+  if(x < W*0.5){
+    if(!ジョイ.つかってる){
+      ジョイ.つかってる = true; ジョイ.id = id;
+      ジョイ.もとx = x; ジョイ.もとy = y; ジョイ.いまx = x; ジョイ.いまy = y;
+      ジョイを更新();
+    }
+  } else if(見るタッチid === null) 見るタッチid = id;
+}
+function タッチ移動(id, x, y){
+  if(じょうたい === 'edit'){ めいろをぬる(x, y, false); return; }
+  if(ジョイ.つかってる && ジョイ.id === id){ ジョイ.いまx = x; ジョイ.いまy = y; ジョイを更新(); }
+}
+function タッチ終了(id){
+  if(ジョイ.id === id){ ジョイ.つかってる = false; ジョイ.id = null; ジョイ.dx = 0; ジョイ.dy = 0; }
+  if(見るタッチid === id) 見るタッチid = null;
+  さわったます = null;
+}
+
+cv.addEventListener('touchstart', function(e){ e.preventDefault();
+  for(const t of e.changedTouches) タッチ開始(t.identifier, t.clientX, t.clientY); }, {passive:false});
+cv.addEventListener('touchmove', function(e){ e.preventDefault();
+  for(const t of e.changedTouches) タッチ移動(t.identifier, t.clientX, t.clientY); }, {passive:false});
+['touchend','touchcancel'].forEach(function(ev){
+  cv.addEventListener(ev, function(e){ e.preventDefault();
+    for(const t of e.changedTouches) タッチ終了(t.identifier); }, {passive:false});
+});
+
+// パソコンで たしかめる とき用
+let マウスおしてる = false;
+cv.addEventListener('mousedown', function(e){ マウスおしてる = true; タッチ開始('mouse', e.clientX, e.clientY); });
+cv.addEventListener('mousemove', function(e){ if(マウスおしてる) タッチ移動('mouse', e.clientX, e.clientY); });
+window.addEventListener('mouseup', function(){ マウスおしてる = false; タッチ終了('mouse'); });
+window.addEventListener('keydown', function(e){ キー[e.key] = true; });
+window.addEventListener('keyup',   function(e){ キー[e.key] = false; });
+
+// パネルの中だけスクロールを許し、それ以外は動かさない
+document.addEventListener('touchmove', function(e){
+  if(e.target.closest && e.target.closest('.scrollable')) return;
+  e.preventDefault();
+}, {passive:false});
+document.addEventListener('gesturestart', function(e){ e.preventDefault(); });
+document.addEventListener('dblclick', function(e){ e.preventDefault(); });
+
+/* ------------------------------------------------------------
+   あたり判定
+   ------------------------------------------------------------ */
+function 丸と四角があたる(cx, cy, r, k){
+  const nx = Math.max(k.x, Math.min(cx, k.x + k.w));
+  const ny = Math.max(k.y, Math.min(cy, k.y + k.h));
+  return (cx-nx)*(cx-nx) + (cy-ny)*(cy-ny) < r*r;
+}
+function かべをよけて動かす(もの, dx, dy){
+  const ためす = function(nx, ny){
+    if(nx < もの.r || nx > W-もの.r || ny < もの.r || ny > H-もの.r) return false;
+    for(const k of かべ) if(丸と四角があたる(nx, ny, もの.r, k)) return false;
+    return true;
+  };
+  if(ためす(もの.x+dx, もの.y+dy)){ もの.x += dx; もの.y += dy; return; }
+  if(ためす(もの.x+dx, もの.y   )){ もの.x += dx; return; }
+  if(ためす(もの.x,    もの.y+dy)){ もの.y += dy; return; }
+}
+function 線が四角をよこぎる(x1, y1, x2, y2, k){
+  let t0 = 0, t1 = 1;
+  const dx = x2-x1, dy = y2-y1;
+  const p = [-dx, dx, -dy, dy];
+  const q = [x1-k.x, k.x+k.w-x1, y1-k.y, k.y+k.h-y1];
+  for(let i = 0; i < 4; i++){
+    if(p[i] === 0){ if(q[i] < 0) return false; continue; }
+    const t = q[i]/p[i];
+    if(p[i] < 0){ if(t > t1) return false; if(t > t0) t0 = t; }
+    else        { if(t < t0) return false; if(t < t1) t1 = t; }
+  }
+  return true;
+}
+function 見とおせる(x1, y1, x2, y2){
+  if(かべごしでも見える) return true;
+  for(const k of かべ) if(線が四角をよこぎる(x1, y1, x2, y2, k)) return false;
+  return true;
+}
+function 角度のさ(a, b){
+  let d = a - b;
+  while(d >  Math.PI) d -= Math.PI*2;
+  while(d < -Math.PI) d += Math.PI*2;
+  return d;
+}
+
+/* ============================================================
+   おと（ぜんぶ その場で つくる。音のファイルは いりません）
+   ・ドローン ……… ずっと鳴っている 低い うなり
+   ・オルゴール …… メロディ
+   ・きしみ ……… ときどき鳴る「ぎぃ…」
+   ・ドキドキ ……… 女の子が 近いときの 心ぞうの音
+   ============================================================ */
+let 音そうち = null, ドキドキタイマー = 0;
+let マスター = null, ひびき = null, ドローン音量 = null, ドローンフィルタ = null;
+let つぎのおと = 0, おとカウンタ = 0, きしみタイマー = 0;
+let こわさ = 0;              // 0（へいわ）〜 1（おいかけられている）
+let ノイズのもと = null;
+
+function 音をはじめる(){
+  if(音そうち) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if(!AC) return;
+  音そうち = new AC();
+
+  // 全体の音量つまみ
+  マスター = 音そうち.createGain();
+  マスター.gain.value = 0;
+  マスター.connect(音そうち.destination);
+
+  // やまびこ（ひろい部屋っぽさ）
+  ひびき = 音そうち.createDelay(1.0);
+  ひびき.delayTime.value = 0.33;
+  const かえし = 音そうち.createGain();
+  かえし.gain.value = 0.32;
+  const ひびきフィルタ = 音そうち.createBiquadFilter();
+  ひびきフィルタ.type = 'lowpass';
+  ひびきフィルタ.frequency.value = 1800;
+  ひびき.connect(ひびきフィルタ).connect(かえし).connect(ひびき);
+  ひびきフィルタ.connect(マスター);
+
+  // ドローン（低いうなり）
+  ドローンフィルタ = 音そうち.createBiquadFilter();
+  ドローンフィルタ.type = 'lowpass';
+  ドローンフィルタ.frequency.value = 220;
+  ドローンフィルタ.Q.value = 6;
+  ドローン音量 = 音そうち.createGain();
+  ドローン音量.gain.value = 0.05;
+  ドローンフィルタ.connect(ドローン音量).connect(マスター);
+  [55, 55.6, 82.5].forEach(function(hz){
+    const o = 音そうち.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.value = hz;
+    o.connect(ドローンフィルタ);
+    o.start();
+  });
+  // ドローンを ゆっくり ゆらす
+  const ゆらし = 音そうち.createOscillator(), ゆらし量 = 音そうち.createGain();
+  ゆらし.frequency.value = 0.07; ゆらし量.gain.value = 70;
+  ゆらし.connect(ゆらし量).connect(ドローンフィルタ.frequency);
+  ゆらし.start();
+
+  // ざつおん（きしみ用）
+  const なが = 音そうち.sampleRate * 2;
+  ノイズのもと = 音そうち.createBuffer(1, なが, 音そうち.sampleRate);
+  const d = ノイズのもと.getChannelData(0);
+  for(let i = 0; i < なが; i++) d[i] = Math.random()*2 - 1;
+
+  つぎのおと = 音そうち.currentTime + 0.3;
+  おとカウンタ = 0;
+  きしみタイマー = 4 + Math.random()*6;
+}
+
+function 音量をあわせる(){
+  if(!マスター) return;
+  let め = 0;
+  if(じょうたい === 'playing')      め = おんがくをならす ? おんがくのおおきさ : 0;
+  else if(じょうたい === 'gameover') め = おんがくをならす ? おんがくのおおきさ*0.5 : 0;
+  マスター.gain.setTargetAtTime(め, 音そうち.currentTime, 0.4);
+}
+
+function おんがくのつよさをあわせる(){
+  if(!ドローン音量) return;
+  const t = 音そうち.currentTime;
+  ドローン音量.gain.setTargetAtTime(0.04 + 0.10*こわさ, t, 0.3);
+  ドローンフィルタ.Q.setTargetAtTime(6 + 10*こわさ, t, 0.3);
+}
+
+function オルゴール(けんばん, t){
+  const f = 440 * Math.pow(2, (けんばん - 69)/12);
+  const g = 音そうち.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.16, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+  g.connect(マスター); g.connect(ひびき);
+  [[f, 'triangle', 1], [f*2.01, 'sine', 0.35], [f*0.5, 'sine', 0.25]].forEach(function(s){
+    const o = 音そうち.createOscillator(), gg = 音そうち.createGain();
+    o.type = s[1]; o.frequency.value = s[0]; gg.gain.value = s[2];
+    o.connect(gg).connect(g);
+    o.start(t); o.stop(t + 1.7);
+  });
+}
+
+function ひくいうなり(t){
+  const o = 音そうち.createOscillator(), g = 音そうち.createGain();
+  o.type = 'square';
+  o.frequency.setValueAtTime(70, t);
+  o.frequency.exponentialRampToValueAtTime(46, t + 0.3);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.07, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+  o.connect(g).connect(マスター);
+  o.start(t); o.stop(t + 0.5);
+}
+
+function きしみ(t){
+  if(!ノイズのもと) return;
+  const src = 音そうち.createBufferSource();
+  src.buffer = ノイズのもと;
+  const f = 音そうち.createBiquadFilter();
+  f.type = 'bandpass'; f.Q.value = 14;
+  f.frequency.setValueAtTime(500 + Math.random()*400, t);
+  f.frequency.linearRampToValueAtTime(1400 + Math.random()*900, t + 1.1);
+  const g = 音そうち.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.05, t + 0.25);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+  src.connect(f).connect(g); g.connect(マスター); g.connect(ひびき);
+  src.start(t); src.stop(t + 1.3);
+}
+
+// メロディを さきに よやく していく
+function おんがくよてい(dt){
+  if(!音そうち || !おんがくをならす) return;
+  if(じょうたい !== 'playing' && じょうたい !== 'gameover') return;
+  const いま = 音そうち.currentTime;
+  if(つぎのおと < いま) つぎのおと = いま + 0.05;
+
+  const はやさ = おんがくのはやさ * (1 + こわさ*0.5);
+  const 一はく = (60 / はやさ) / 2;
+
+  while(つぎのおと < いま + 0.3){
+    const n = メロディ.length ? メロディ[おとカウンタ % メロディ.length] : null;
+    if(n !== null && n !== undefined) オルゴール(n, つぎのおと);
+    if(こわさ > 0.45 && おとカウンタ % 2 === 0) ひくいうなり(つぎのおと);
+    おとカウンタ++;
+    つぎのおと += 一はく;
+  }
+
+  きしみタイマー -= dt/60;
+  if(きしみタイマー <= 0){
+    きしみ(いま + 0.1);
+    きしみタイマー = 6 + Math.random()*9;
+  }
+}
+
+function ドン(つよさ){
+  if(!音そうち || !ドキドキ音をならす) return;
+  const t = 音そうち.currentTime;
+  const osc = 音そうち.createOscillator(), g = 音そうち.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(90, t);
+  osc.frequency.exponentialRampToValueAtTime(42, t+0.16);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.06 + 0.24*つよさ, t+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+0.22);
+  osc.connect(g).connect(音そうち.destination);
+  osc.start(t); osc.stop(t+0.24);
+}
+
+/* ------------------------------------------------------------
+   こうしん
+   ------------------------------------------------------------ */
+function こうしん(dt){
+  if(じょうたい !== 'playing') return;
+  const 見るモード = (見るタッチid !== null) || !!キー['Shift'];
+
+  let mx = 0, my = 0;
+  if(ジョイ.つかってる){ mx = ジョイ.dx; my = ジョイ.dy; }
+  if(キー['ArrowLeft'])  mx -= 1;
+  if(キー['ArrowRight']) mx += 1;
+  if(キー['ArrowUp'])    my -= 1;
+  if(キー['ArrowDown'])  my += 1;
+  if(見るモード){ mx = 0; my = 0; }
+
+  const len = Math.hypot(mx, my);
+  if(len > 0.08){
+    mx /= len; my /= len;
+    じぶん.むき = Math.atan2(my, mx);
+    かべをよけて動かす(じぶん, mx*プレイヤーの歩くスピード*dt, my*プレイヤーの歩くスピード*dt);
+  }
+
+  let いちばん近い = 99999;
+  for(const お of 女の子たち){
+    const dx = お.x - じぶん.x, dy = お.y - じぶん.y;
+    const きょり = Math.hypot(dx, dy);
+    いちばん近い = Math.min(いちばん近い, きょり);
+
+    let とまる = false;
+    if(見るモード) とまる = true;
+    else if(きょり < 見つめられるきょり && 見とおせる(じぶん.x, じぶん.y, お.x, お.y)){
+      とまる = Math.abs(角度のさ(Math.atan2(dy, dx), じぶん.むき)) < 見えるひろさ*Math.PI/180;
+    }
+    お.とまってる = とまる;
+
+    if(!とまる && きょり > 1){
+      お.ゆらぎ += dt*0.25;
+      const 角 = Math.atan2(dy, dx) + Math.PI + Math.sin(お.ゆらぎ)*0.18;
+      かべをよけて動かす(お, Math.cos(角)*こわい女の子が追いかけてくるスピード*dt,
+                            Math.sin(角)*こわい女の子が追いかけてくるスピード*dt);
+    }
+    if(Math.hypot(お.x-じぶん.x, お.y-じぶん.y) < (お.r + じぶん.r)*0.62){ おわり(false); return; }
+  }
+
+  if(Math.hypot(じぶん.x-ゴール.x, じぶん.y-ゴール.y) < ゴール.r*0.8){ おわり(true); return; }
+
+  const ちかさ = Math.max(0, 1 - いちばん近い/420);
+  ゆれ = ちかさ*ちかさ*5;
+
+  // おいかけられている ほど、おんがくが こわくなる
+  let おわれてる = false;
+  for(const お of 女の子たち)
+    if(!お.とまってる && Math.hypot(お.x-じぶん.x, お.y-じぶん.y) < 520) おわれてる = true;
+  const もくひょう = おわれてる ? 1 : ちかさ*0.5;
+  こわさ += (もくひょう - こわさ) * 0.05 * dt;
+  おんがくのつよさをあわせる();
+
+  ドキドキタイマー -= dt/60;
+  if(ドキドキタイマー <= 0 && ちかさ > 0.12){ ドン(ちかさ); ドキドキタイマー = 0.95 - 0.55*ちかさ; }
+}
+
+/* ------------------------------------------------------------
+   えがく
+   ------------------------------------------------------------ */
+function えがく(じかん){
+  ctx.save();
+  if(ゆれ > 0.2 && じょうたい === 'playing')
+    ctx.translate((Math.random()-.5)*ゆれ, (Math.random()-.5)*ゆれ);
+
+  ctx.fillStyle = ゆかのいろ;
+  ctx.fillRect(-10, -10, W+20, H+20);
+
+  if(じょうたい === 'edit') ますめをえがく();
+  else {
+    ctx.strokeStyle = 'rgba(255,255,255,.035)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for(let x = 0; x < W; x += 56){ ctx.moveTo(x,0); ctx.lineTo(x,H); }
+    for(let y = 0; y < H; y += 56){ ctx.moveTo(0,y); ctx.lineTo(W,y); }
+    ctx.stroke();
+  }
+
+  ゴールをえがく(じかん);
+  かべをえがく();
+
+  if(じょうたい === 'edit'){
+    スタートじるしをえがく();
+    for(const m of 女の子のますリスト)
+      女の子をえがく({ x:(m.c+0.5)*セルW, y:(m.r+0.5)*セルH, r:こわい女の子の大きさ/2,
+                        とまってる:true, ゆらぎ:0 }, じかん);
+  } else if(じょうたい === 'playing' || じょうたい === 'gameover'){
+    見えるはんいをえがく();
+    for(const お of 女の子たち) 女の子をえがく(お, じかん);
+    じぶんをえがく();
+    ジョイスティックをえがく();
+  }
+  ctx.restore();
+}
+
+function ますめをえがく(){
+  ctx.strokeStyle = 'rgba(255,255,255,.16)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for(let c = 0; c <= ヨコマス; c++){ ctx.moveTo(c*セルW, 0); ctx.lineTo(c*セルW, H); }
+  for(let r = 0; r <= タテマス; r++){ ctx.moveTo(0, r*セルH); ctx.lineTo(W, r*セルH); }
+  ctx.stroke();
+}
+function スタートじるしをえがく(){
+  const x = (スタートのます.c+0.5)*セルW, y = (スタートのます.r+0.5)*セルH;
+  ctx.fillStyle = '#5ec8ff';
+  ctx.beginPath();
+  ctx.moveTo(x, y-20); ctx.lineTo(x+18, y+14); ctx.lineTo(x-18, y+14);
+  ctx.closePath(); ctx.fill();
+}
+function かべをえがく(){
+  for(const k of かべ){
+    ctx.fillStyle = かべのいろ;
+    ctx.fillRect(k.x, k.y, k.w, k.h);
+    ctx.fillStyle = 'rgba(255,255,255,.10)';
+    ctx.fillRect(k.x, k.y, k.w, 3);
+  }
+}
+function ゴールをえがく(じかん){
+  const また = 0.5 + 0.5*Math.sin(じかん/420);
+  const g = ctx.createRadialGradient(ゴール.x, ゴール.y, 4, ゴール.x, ゴール.y, ゴール.r);
+  g.addColorStop(0, 'rgba(125,255,176,' + (0.30+0.18*また) + ')');
+  g.addColorStop(1, 'rgba(125,255,176,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(ゴール.x, ゴール.y, ゴール.r, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = ゴールのいろ; ctx.lineWidth = 3; ctx.setLineDash([10,9]);
+  ctx.beginPath(); ctx.arc(ゴール.x, ゴール.y, ゴール.r*0.8, 0, Math.PI*2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = ゴールのいろ;
+  ctx.font = 'bold ' + Math.round(ゴール.r*0.4) + 'px "Hiragino Maru Gothic ProN", sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('ゴール', ゴール.x, ゴール.y);
+}
+function 見えるはんいをえがく(){
+  const はば = 見えるひろさ*Math.PI/180;
+  const g = ctx.createRadialGradient(じぶん.x, じぶん.y, じぶん.r, じぶん.x, じぶん.y, 見つめられるきょり);
+  g.addColorStop(0, 'rgba(255,246,200,.20)');
+  g.addColorStop(1, 'rgba(255,246,200,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.moveTo(じぶん.x, じぶん.y);
+  ctx.arc(じぶん.x, じぶん.y, 見つめられるきょり, じぶん.むき-はば, じぶん.むき+はば);
+  ctx.closePath(); ctx.fill();
+}
+function じぶんをえがく(){
+  const s = プレイヤーの大きさ;
+  if(つかえる(画像.じぶん)){ ctx.drawImage(画像.じぶん, じぶん.x-s/2, じぶん.y-s/2, s, s); return; }
+  ctx.save(); ctx.translate(じぶん.x, じぶん.y);
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  ctx.beginPath(); ctx.ellipse(0, s*0.42, s*0.36, s*0.14, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#5ec8ff'; ctx.strokeStyle = '#0d2b42'; ctx.lineWidth = Math.max(2, s*0.06);
+  ctx.beginPath(); ctx.arc(0, 0, s*0.42, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.rotate(じぶん.むき);
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.moveTo(s*0.20, -s*0.20); ctx.lineTo(s*0.52, 0); ctx.lineTo(s*0.20, s*0.20);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function オーラ(x, y, s, いろ){
+  const r = s*0.95;
+  const g = ctx.createRadialGradient(x, y, s*0.25, x, y, r);
+  g.addColorStop(0, いろ); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+}
+function 女の子をえがく(お, じかん){
+  const s = こわい女の子の大きさ;
+  const とまってる = お.とまってる;
+  const ゆれ幅 = とまってる ? 0 : Math.sin(じかん/90 + お.ゆらぎ)*s*0.035;
+  const im = とまってる ? 画像.かわいい : 画像.こわい;
+  if(つかえる(im)){
+    if(!とまってる) オーラ(お.x, お.y+ゆれ幅, s, 'rgba(255,40,60,.35)');
+    ctx.drawImage(im, お.x-s/2, お.y-s/2+ゆれ幅, s, s);
+    return;
+  }
+  ctx.save(); ctx.translate(お.x, お.y+ゆれ幅);
+  const r = s*0.5;
+  オーラ(0, 0, s, とまってる ? 'rgba(255,220,240,.22)' : 'rgba(255,40,60,.38)');
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  ctx.beginPath(); ctx.ellipse(0, r*0.98, r*0.62, r*0.18, 0, 0, Math.PI*2); ctx.fill();
+
+  const 線 = Math.max(2, s*0.045);
+  ctx.lineJoin = 'round'; ctx.strokeStyle = '#14121c'; ctx.lineWidth = 線;
+  ctx.fillStyle = とまってる ? '#fdfbff' : '#cdc6d6';
+  ctx.beginPath();
+  ctx.moveTo(-r*0.34, r*0.06); ctx.lineTo(r*0.34, r*0.06);
+  ctx.lineTo(r*0.62, r*0.92);  ctx.lineTo(-r*0.62, r*0.92);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+
+  ctx.fillStyle = とまってる ? '#fff3f6' : '#d9d2e0';
+  ctx.beginPath(); ctx.arc(0, -r*0.32, r*0.62, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+  ctx.fillStyle = '#17151f';
+  ctx.beginPath(); ctx.arc(0, -r*0.32, r*0.62, Math.PI*1.03, Math.PI*1.97); ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-r*0.60, -r*0.34); ctx.lineTo(-r*0.16, -r*0.02); ctx.lineTo(r*0.04, -r*0.40);
+  ctx.lineTo(r*0.26, -r*0.02);  ctx.lineTo(r*0.60, -r*0.34);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(r*0.72, -r*0.20, r*0.22, r*0.40, 0.3, 0, Math.PI*2); ctx.fill();
+
+  if(とまってる){
+    for(const mx of [-r*0.26, r*0.26]){
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(mx, -r*0.28, r*0.20, 0, Math.PI*2); ctx.fill();
+      ctx.lineWidth = 線*0.7; ctx.stroke();
+      ctx.fillStyle = '#14121c';
+      ctx.beginPath(); ctx.arc(mx, -r*0.26, r*0.10, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(mx+r*0.05, -r*0.31, r*0.04, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.strokeStyle = '#14121c'; ctx.lineWidth = 線*0.8;
+    ctx.beginPath(); ctx.arc(0, r*0.02, r*0.14, 0.15*Math.PI, 0.85*Math.PI); ctx.stroke();
+  } else {
+    ctx.fillStyle = '#0a0a0c';
+    ctx.fillRect(-r*0.66, -r*0.46, r*1.32, r*0.34);
+    ctx.strokeStyle = '#e01020'; ctx.lineWidth = 線*1.1; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-r*0.46, -r*0.42); ctx.lineTo(r*0.46, -r*0.14);
+    ctx.moveTo(r*0.46, -r*0.42);  ctx.lineTo(-r*0.46, -r*0.14);
+    ctx.stroke();
+    ctx.strokeStyle = '#14121c'; ctx.lineWidth = 線*0.75; ctx.lineCap = 'butt';
+    ctx.beginPath();
+    ctx.moveTo(-r*0.18, 0); ctx.lineTo(-r*0.06, r*0.10);
+    ctx.lineTo(r*0.04, 0);  ctx.lineTo(r*0.16, r*0.10);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function ジョイスティックをえがく(){
+  if(!ジョイ.つかってる) return;
+  ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(ジョイ.もとx, ジョイ.もとy, ジョイの半径, 0, Math.PI*2); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.30)';
+  ctx.beginPath();
+  ctx.arc(ジョイ.もとx + ジョイ.dx*ジョイの半径, ジョイ.もとy + ジョイ.dy*ジョイの半径, 26, 0, Math.PI*2);
+  ctx.fill();
+}
+
+/* ============================================================
+   ⚙ せってい パネル
+   ============================================================ */
+const panel = document.getElementById('panel');
+const titleLayer = document.getElementById('titleLayer');
+const resultLayer = document.getElementById('resultLayer');
+const resultText = document.getElementById('resultText');
+const hint = document.getElementById('hint');
+const editBar = document.getElementById('editBar');
+const editHint = document.getElementById('editHint');
+const gearBtn = document.getElementById('gearBtn');
+
+function 女の子のかずをかえる(のぞむかず){
+  めいろをよみとる();
+  let いま = 女の子のますリスト.length;
+  while(いま > のぞむかず){
+    const m = 女の子のますリスト.pop();
+    ますをかく(m.c, m.r, '.'); いま--;
+  }
+  const あきます = [];
+  for(let r = 0; r < タテマス; r++)
+    for(let c = 0; c < ヨコマス; c++)
+      if(ますをよむ(c, r) === '.' &&
+         Math.hypot(c - スタートのます.c, r - スタートのます.r) > 2.5) あきます.push({ c:c, r:r });
+  while(いま < のぞむかず && あきます.length){
+    const i = Math.floor(Math.random()*あきます.length);
+    const m = あきます.splice(i, 1)[0];
+    ますをかく(m.c, m.r, 'X'); いま++;
+  }
+  めいろをよみとる();
+}
+
+// ▼ スライダーで かえられるもの
+const つまみリスト = [
+  { なまえ:'じぶんが あるく はやさ', min:1.5, max:8, step:0.2, けた:1,
+    よむ:function(){ return プレイヤーの歩くスピード; },
+    かく:function(v){ プレイヤーの歩くスピード = v; } },
+  { なまえ:'女の子が おいかける はやさ', min:0.5, max:6, step:0.1, けた:1,
+    よむ:function(){ return こわい女の子が追いかけてくるスピード; },
+    かく:function(v){ こわい女の子が追いかけてくるスピード = v; } },
+  { なまえ:'女の子の 大きさ', min:30, max:140, step:2, けた:0,
+    よむ:function(){ return こわい女の子の大きさ; },
+    かく:function(v){ こわい女の子の大きさ = v; } },
+  { なまえ:'じぶんの 大きさ', min:24, max:70, step:2, けた:0,
+    よむ:function(){ return プレイヤーの大きさ; },
+    かく:function(v){ プレイヤーの大きさ = v; } },
+  { なまえ:'女の子の かず', min:0, max:8, step:1, けた:0,
+    よむ:function(){ return 女の子のますリスト.length; },
+    かく:function(v){ 女の子のかずをかえる(v); } },
+  { なまえ:'ゴールの 大きさ', min:60, max:260, step:10, けた:0,
+    よむ:function(){ return ゴールのおおきさ; },
+    かく:function(v){ ゴールのおおきさ = v; } },
+  { なまえ:'見える はんいの ひろさ', min:15, max:110, step:5, けた:0,
+    よむ:function(){ return 見えるひろさ; },
+    かく:function(v){ 見えるひろさ = v; } },
+  { なまえ:'見える とおさ', min:150, max:900, step:20, けた:0,
+    よむ:function(){ return 見つめられるきょり; },
+    かく:function(v){ 見つめられるきょり = v; } }
+];
+
+const おとのつまみリスト = [
+  { なまえ:'おんがくの おおきさ', min:0, max:1, step:0.05, けた:2,
+    よむ:function(){ return おんがくのおおきさ; },
+    かく:function(v){ おんがくのおおきさ = v; 音量をあわせる(); } },
+  { なまえ:'おんがくの はやさ', min:30, max:120, step:2, けた:0,
+    よむ:function(){ return おんがくのはやさ; },
+    かく:function(v){ おんがくのはやさ = v; } }
+];
+
+const slidersBox = document.getElementById('sliders');
+const soundBox = document.getElementById('soundSliders');
+const つまみDOM = [];
+function つまみをつくる(つ, 箱){
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.innerHTML =
+    '<div class="rowtop"><span class="rowname"></span><span class="rowval"></span></div>' +
+    '<div class="ctrl"><button class="pm">−</button><input type="range"><button class="pm">＋</button></div>';
+  row.querySelector('.rowname').textContent = つ.なまえ;
+  const val = row.querySelector('.rowval');
+  const pms = row.querySelectorAll('.pm');
+  const rng = row.querySelector('input');
+  rng.min = つ.min; rng.max = つ.max; rng.step = つ.step;
+
+  const みせる = function(){
+    const v = つ.よむ();
+    rng.value = v;
+    val.textContent = Number(v).toFixed(つ.けた);
+  };
+  const きめる = function(v){
+    v = Math.min(つ.max, Math.max(つ.min, Math.round(v/つ.step)*つ.step));
+    つ.かく(Number(v.toFixed(3)));
+    みせる(); ほぞん();
+  };
+  rng.addEventListener('input', function(){ きめる(parseFloat(rng.value)); });
+  pms[0].addEventListener('click', function(){ きめる(つ.よむ() - つ.step); });
+  pms[1].addEventListener('click', function(){ きめる(つ.よむ() + つ.step); });
+  箱.appendChild(row);
+  つまみDOM.push(みせる);
+}
+つまみリスト.forEach(function(つ){ つまみをつくる(つ, slidersBox); });
+おとのつまみリスト.forEach(function(つ){ つまみをつくる(つ, soundBox); });
+
+// メロディ えらび
+const melodyBox = document.getElementById('melodyBox');
+メロディの見本.forEach(function(み){
+  const b = document.createElement('button');
+  b.textContent = み.なまえ;
+  b.addEventListener('click', function(){
+    メロディ = み.おと.slice();
+    おとカウンタ = 0;
+    メロディボタンをそろえる();
+    ほぞん();
+  });
+  melodyBox.appendChild(b);
+});
+function メロディボタンをそろえる(){
+  const いま = JSON.stringify(メロディ);
+  Array.prototype.forEach.call(melodyBox.children, function(b, i){
+    b.classList.toggle('on', JSON.stringify(メロディの見本[i].おと) === いま);
+  });
+}
+
+// オン／オフの ボタン
+const bgmBtn = document.getElementById('bgmBtn');
+const heartBtn = document.getElementById('heartBtn');
+function おとボタンをそろえる(){
+  bgmBtn.textContent = 'おんがく：' + (おんがくをならす ? 'オン' : 'オフ');
+  bgmBtn.classList.toggle('off', !おんがくをならす);
+  heartBtn.textContent = 'ドキドキ音：' + (ドキドキ音をならす ? 'オン' : 'オフ');
+  heartBtn.classList.toggle('off', !ドキドキ音をならす);
+}
+bgmBtn.addEventListener('click', function(){
+  おんがくをならす = !おんがくをならす;
+  おとボタンをそろえる(); 音量をあわせる(); ほぞん();
+});
+heartBtn.addEventListener('click', function(){
+  ドキドキ音をならす = !ドキドキ音をならす;
+  おとボタンをそろえる(); ほぞん();
+});
+
+const msgBad = document.getElementById('msgBad'), msgGood = document.getElementById('msgGood');
+const colFloor = document.getElementById('colFloor'), colWall = document.getElementById('colWall'),
+      colGoal = document.getElementById('colGoal');
+msgBad .addEventListener('input', function(){ つかまったときのメッセージ = msgBad.value || "つかまった！"; ほぞん(); });
+msgGood.addEventListener('input', function(){ クリアしたときのメッセージ = msgGood.value || "にげきった！"; ほぞん(); });
+colFloor.addEventListener('input', function(){ ゆかのいろ = colFloor.value; ほぞん(); });
+colWall .addEventListener('input', function(){ かべのいろ = colWall.value;  ほぞん(); });
+colGoal .addEventListener('input', function(){ ゴールのいろ = colGoal.value; ほぞん(); });
+
+function パネルをそろえる(){
+  つまみDOM.forEach(function(f){ f(); });
+  msgBad.value = つかまったときのメッセージ;
+  msgGood.value = クリアしたときのメッセージ;
+  colFloor.value = ゆかのいろ; colWall.value = かべのいろ; colGoal.value = ゴールのいろ;
+  メロディボタンをそろえる();
+  おとボタンをそろえる();
+}
+function パネルをひらく(){
+  じょうたい = 'settings';
+  パネルをそろえる();
+  panel.classList.remove('hidden');
+  titleLayer.classList.add('hidden');
+  resultLayer.classList.add('hidden');
+  hint.classList.add('hidden');
+  gearBtn.classList.add('hidden');
+  音量をあわせる();
+}
+gearBtn.addEventListener('click', パネルをひらく);
+document.getElementById('playBtn').addEventListener('click', function(){
+  panel.classList.add('hidden'); ゲームをはじめる();
+});
+
+/* ---- めいろ づくり ---- */
+let どうぐ = 'かべ';
+let さわったます = null;
+
+document.querySelectorAll('.tool[data-tool]').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.tool[data-tool]').forEach(function(x){ x.classList.remove('on'); });
+    b.classList.add('on');
+    どうぐ = b.dataset.tool;
+    editHint.textContent = どうぐ + ' を おく ばしょを さわってね';
+  });
+});
+
+function めいろをぬる(x, y, さいしょ){
+  const c = Math.floor(x/セルW), r = Math.floor(y/セルH);
+  if(c < 0 || c >= ヨコマス || r < 0 || r >= タテマス) return;
+  const key = c + ',' + r;
+  if(!さいしょ && さわったます === key) return;
+  さわったます = key;
+
+  const いま = ますをよむ(c, r);
+  if(どうぐ === 'かべ'){
+    if(いま === 'S' || いま === 'G') return;
+    ますをかく(c, r, '#');
+  } else if(どうぐ === 'けす'){
+    if(いま === 'S' || いま === 'G') return;
+    ますをかく(c, r, '.');
+  } else if(どうぐ === 'おんなのこ'){
+    if(いま === 'S' || いま === 'G') return;
+    ますをかく(c, r, いま === 'X' ? '.' : 'X');
+  } else if(どうぐ === 'ゴール'){
+    もじを全部けす('G'); ますをかく(c, r, 'G');
+  } else if(どうぐ === 'スタート'){
+    もじを全部けす('S'); ますをかく(c, r, 'S');
+  }
+  めいろをよみとる();
+  ほぞん();
+}
+
+document.getElementById('editBtn').addEventListener('click', function(){
+  じょうたい = 'edit';
+  panel.classList.add('hidden');
+  editBar.classList.remove('hidden');
+  editHint.classList.remove('hidden');
+  editHint.textContent = どうぐ + ' を おく ばしょを さわってね';
+});
+document.getElementById('editDone').addEventListener('click', function(){
+  editBar.classList.add('hidden');
+  editHint.classList.add('hidden');
+  パネルをひらく();
+});
+document.getElementById('clearMaze').addEventListener('click', function(){
+  for(let r = 0; r < タテマス; r++)
+    for(let c = 0; c < ヨコマス; c++)
+      if(ますをよむ(c, r) === '#') ますをかく(c, r, '.');
+  めいろをよみとる(); ほぞん();
+});
+
+/* ---- ほぞん（iPad に おぼえさせる）---- */
+function いまのせってい(){
+  return {
+    歩く: プレイヤーの歩くスピード, 追う: こわい女の子が追いかけてくるスピード,
+    敵大: こわい女の子の大きさ, 自大: プレイヤーの大きさ, ゴール大: ゴールのおおきさ,
+    きょり: 見つめられるきょり, ひろさ: 見えるひろさ,
+    わるい: つかまったときのメッセージ, よい: クリアしたときのメッセージ,
+    ゆか: ゆかのいろ, かべ: かべのいろ, ゴール: ゴールのいろ,
+    めいろ: めいろ.slice(),
+    音量: おんがくのおおきさ, 音速: おんがくのはやさ, 音入: おんがくをならす,
+    心音: ドキドキ音をならす, 曲: メロディ.slice()
+  };
+}
+function せっていをあてる(s){
+  プレイヤーの歩くスピード = s.歩く;
+  こわい女の子が追いかけてくるスピード = s.追う;
+  こわい女の子の大きさ = s.敵大;
+  プレイヤーの大きさ = s.自大;
+  ゴールのおおきさ = s.ゴール大;
+  見つめられるきょり = s.きょり;
+  見えるひろさ = s.ひろさ;
+  つかまったときのメッセージ = s.わるい;
+  クリアしたときのメッセージ = s.よい;
+  ゆかのいろ = s.ゆか; かべのいろ = s.かべ; ゴールのいろ = s.ゴール;
+  めいろ = s.めいろ.slice();
+  if(s.音量 !== undefined) おんがくのおおきさ = s.音量;
+  if(s.音速 !== undefined) おんがくのはやさ = s.音速;
+  if(s.音入 !== undefined) おんがくをならす = s.音入;
+  if(s.心音 !== undefined) ドキドキ音をならす = s.心音;
+  if(s.曲)  メロディ = s.曲.slice();
+  めいろをよみとる();
+}
+function ほぞん(){
+  try { localStorage.setItem('inaiinai', JSON.stringify(いまのせってい())); } catch(e) {}
+}
+function よみこみ(){
+  try {
+    const t = localStorage.getItem('inaiinai');
+    if(t) せっていをあてる(JSON.parse(t));
+  } catch(e) {}
+}
+document.getElementById('resetAllBtn').addEventListener('click', function(){
+  せっていをあてる(しょきち);
+  try { localStorage.removeItem('inaiinai'); } catch(e) {}
+  パネルをそろえる();
+});
+
+/* ---- おとうさんに わたす（コードを コピー）---- */
+document.getElementById('copyBtn').addEventListener('click', function(){
+  const t =
+'let プレイヤーの歩くスピード = ' + プレイヤーの歩くスピード + ';\n' +
+'let こわい女の子が追いかけてくるスピード = ' + こわい女の子が追いかけてくるスピード + ';\n' +
+'let こわい女の子の大きさ = ' + こわい女の子の大きさ + ';\n' +
+'let プレイヤーの大きさ   = ' + プレイヤーの大きさ + ';\n' +
+'let めいろ = [\n' + めいろ.map(function(r){ return '  "' + r + '",'; }).join('\n') + '\n];\n' +
+'let ゴールのおおきさ   = ' + ゴールのおおきさ + ';\n' +
+'let 見つめられるきょり = ' + 見つめられるきょり + ';\n' +
+'let 見えるひろさ       = ' + 見えるひろさ + ';\n' +
+'let つかまったときのメッセージ = "' + つかまったときのメッセージ + '";\n' +
+'let クリアしたときのメッセージ = "' + クリアしたときのメッセージ + '";\n' +
+'let ゆかのいろ   = "' + ゆかのいろ + '";\n' +
+'let かべのいろ   = "' + かべのいろ + '";\n' +
+'let ゴールのいろ = "' + ゴールのいろ + '";\n' +
+'let おんがくをならす   = ' + おんがくをならす + ';\n' +
+'let おんがくのおおきさ = ' + おんがくのおおきさ + ';\n' +
+'let おんがくのはやさ   = ' + おんがくのはやさ + ';\n' +
+'let ドキドキ音をならす = ' + ドキドキ音をならす + ';\n' +
+'let メロディ = [' + メロディ.join(', ') + '];';
+
+  const btn = document.getElementById('copyBtn');
+  const てわたす = function(){
+    const ta = document.createElement('textarea');
+    ta.className = 'textin'; ta.rows = 12; ta.value = t;
+    btn.parentNode.insertBefore(ta, btn.nextSibling);
+    ta.focus(); ta.select();
+    btn.textContent = '↓ これを えらんで コピーしてね';
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(function(){
+      btn.textContent = 'コピーしたよ！ メモに はりつけてね';
+      setTimeout(function(){ btn.textContent = 'いまの せってい を コピーする'; }, 4000);
+    }).catch(てわたす);
+  } else てわたす();
+});
+
+/* ============================================================
+   画面の きりかえ と メインループ
+   ============================================================ */
+function ゲームをはじめる(){
+  音をはじめる();
+  if(音そうち && 音そうち.state === 'suspended') 音そうち.resume();
+  リセット();
+  こわさ = 0;
+  じょうたい = 'playing';
+  音量をあわせる();
+  おんがくのつよさをあわせる();
+  titleLayer.classList.add('hidden');
+  resultLayer.classList.add('hidden');
+  panel.classList.add('hidden');
+  editBar.classList.add('hidden');
+  editHint.classList.add('hidden');
+  hint.classList.remove('hidden');
+  gearBtn.classList.remove('hidden');
+}
+function おわり(せいこう){
+  じょうたい = せいこう ? 'clear' : 'gameover';
+  resultText.textContent = せいこう ? クリアしたときのメッセージ : つかまったときのメッセージ;
+  resultText.className = 'result ' + (せいこう ? 'good' : 'bad');
+  resultLayer.classList.remove('hidden');
+  hint.classList.add('hidden');
+  gearBtn.classList.remove('hidden');
+  ジョイ.つかってる = false; ジョイ.dx = 0; ジョイ.dy = 0; 見るタッチid = null;
+  音量をあわせる();
+}
+document.getElementById('startBtn').addEventListener('click', ゲームをはじめる);
+document.getElementById('retryBtn').addEventListener('click', ゲームをはじめる);
+
+let まえのじかん = 0;
+function ループ(いま){
+  const dt = Math.min(3, (いま - まえのじかん)/16.667 || 1);
+  まえのじかん = いま;
+  こうしん(dt);
+  おんがくよてい(dt);
+  えがく(いま);
+  requestAnimationFrame(ループ);
+}
+
+function 画面かわった(){
+  画面サイズをあわせる();
+  if(じょうたい === 'playing') リセット();
+}
+window.addEventListener('resize', 画面かわった);
+window.addEventListener('orientationchange', function(){ setTimeout(画面かわった, 250); });
+
+画像を全部よみこむ();
+画面サイズをあわせる();
+よみこみ();
+画面サイズをあわせる();
+リセット();
+hint.classList.add('hidden');
+requestAnimationFrame(ループ);
+</script>
+</body>
+</html>
